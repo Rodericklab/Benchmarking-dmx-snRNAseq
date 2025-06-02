@@ -1,0 +1,47 @@
+#!/bin/bash
+#PBS -l walltime=30:00:00
+#PBS -l nodes=1:ppn=1
+#PBS -l pmem=100gb
+#PBS -N samtools_on_merged_30pc_bam
+#PBS -A lp_expcardiology
+#PBS -m bae
+#PBS -M yile.fu@kuleuven.be
+
+
+#########################################
+# Shell script to run doublets simulation
+#########################################
+
+
+# arguments:
+# $1: directory for runtimes
+# $2: directory for timestamp files
+# $3: number of threads
+# $4: output directory
+# $5: dataset name for simulation scenario
+# $6: percentage of doublets for simulation scenario (formatted as e.g. "30pc")
+
+module load SAMtools/1.9-GCC-6.4.0-2.28
+
+MER_DIR=/staging/leuven/stg_00085/YileF/AF_project/demultiplexing/snp_array/snRNA_seq/workflow/outputs/IDCM/6samples/bam_merged
+BAR_DIR=/staging/leuven/stg_00085/YileF/AF_project/demultiplexing/snp_array/snRNA_seq/workflow/outputs/IDCM/6samples/doublets_sims/30pc
+SIP_DIR=/staging/leuven/stg_00085/YileF/AF_project/demultiplexing/snp_array/snRNA_seq/workflow/outputs/IDCM/6samples/doublets_sims/30pc
+
+# -----------------------------
+# Parse through merged BAM file
+# -----------------------------
+
+# note hyphen for argument order
+samtools view -h $MER_DIR/bam_merged.bam | \
+awk \
+'NR==1 { next } FNR==NR { a[$1]=$2; next } (i=gensub(/.*CB\:Z\:([A-Za-z]+\-[A-Za-z0-9]+).*/, "\\1", 1, $0)) in a { gsub(i, a[i]) }1' \
+$BAR_DIR/lookup_table_doublets_IDCM_30pc.tsv - | \
+samtools view -bo $SIP_DIR/bam_merged_doublets_IDCM_30pc.bam
+
+
+# ---------
+# Index BAM
+# ---------
+
+samtools index $SIP_DIR/bam_merged_doublets_IDCM_30pc.bam
+

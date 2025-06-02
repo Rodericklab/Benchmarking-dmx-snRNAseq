@@ -1,0 +1,177 @@
+#####################################
+# Snakefile to run Snakemake workflow
+#####################################
+
+# This Snakefile runs a complete workflow for one dataset, doublets simulation
+# scenario, and choice of genotype file. This can be extended to include additional
+# simulation scenarios by modifying the rules below, or adding separate scripts.
+# For examples of scripts for additional scenarios, see the scripts saved in the
+# "benchmarking/run_scenarios" directory.
+
+
+# ---------
+# variables
+# ---------
+
+dir_scripts = "scripts"
+dir_data = "../data"
+dir_data_cellranger_ref = "../reference/refdata-gex-GRCh38-2020-A"
+dir_genotype = "../genotype"
+dir_outputs = "../workflow/outputs"
+dir_outputs_IDCM = dir_outputs + "/IDCM"
+dir_outputs_IDCM_6samples = dir_outputs + "/IDCM/6samples"
+dir_runtimes = "../workflow/runtimes"
+dir_runtimes_IDCM = dir_runtimes + "/IDCM"
+dir_timestamps = "../workflow/timestamps"
+dir_timestamps_IDCM = dir_timestamps + "/IDCM"
+
+
+sample_ids_IDCM = ["GC108593_SI-GA-A2", "GC108594_SI-GA-B2", "GC108595_SI-GA-C2", "GC108596_SI-GA-D2", "GC108597_SI-GA-E2", "GC108598_SI-GA-F2"]
+
+sample_ids_IDCM_short = ["X1", "X2", "X3", "X4", "X5", "X6"]
+sample_ids_IDCM_short_named = {"GC108593_SI-GA-A2": "X1",
+                               "GC108594_SI-GA-B2": "X2",
+                               "GC108595_SI-GA-C2": "X3",
+                               "GC108596_SI-GA-D2": "X4",
+                               "GC108597_SI-GA-E2": "X5",
+                               "GC108598_SI-GA-F2": "X6"}
+
+fastq_dirs_IDCM = {"GC108593_SI-GA-A2": "../data/IDCM/Fastq/GC108593_SI-GA-A2",
+                   "GC108594_SI-GA-B2": "../data/IDCM/Fastq/GC108594_SI-GA-B2",
+                   "GC108595_SI-GA-C2": "../data/IDCM/Fastq/GC108595_SI-GA-C2",
+                   "GC108596_SI-GA-D2": "../data/IDCM/Fastq/GC108596_SI-GA-D2",
+                   "GC108597_SI-GA-E2": "../data/IDCM/Fastq/GC108597_SI-GA-E2",
+                   "GC108598_SI-GA-F2": "../data/IDCM/Fastq/GC108598_SI-GA-F2"}
+
+
+# ------------
+# run workflow
+# ------------
+
+# command to run workflow on cluster
+# notes:
+# - using number of threads specified in each rule
+# - using memory equal to "threads * mem_free" and "threads * h_vmem" (if more
+# precise control is required over the amount of memory for each job, this could
+# be specified in a Snakemake cluster config file)
+
+# snakemake --cluster "qsub -V -cwd -pe local {threads} -l mem_free=5G,h_vmem=10G,h_fsize=300G" -j 3 --local-cores 30 --latency-wait 10
+
+# --------------
+# workflow rules
+# --------------
+
+# default rule
+
+rule all:
+  input:
+    dir_timestamps + "/IDCM/doublets_sims/20pc/parse_and_index_BAM_doublets/timestamp_parse_and_index_BAM_doublets_IDCM_20pc_6samples.txt"
+
+# ---------------------------------------------------------
+# parse and index merged BAM files for doublets simulations
+# ---------------------------------------------------------
+
+# for one doublets simulation scenario (dataset, percentage of doublets)
+rule parse_and_index_BAM_doublets_IDCM_20pc:
+  input:
+    dir_timestamps + "/IDCM/doublets_sims/20pc/lookup_table_doublets/timestamp_lookup_table_doublets_IDCM_20pc_6samples.txt",
+    script_parse_and_index_BAM_doublets_IDCM_20pc = dir_scripts + "/parse_and_index_BAM_doublets_IDCM_20pc.sh"
+  output:
+    dir_timestamps + "/IDCM/doublets_sims/20pc/parse_and_index_BAM_doublets/timestamp_parse_and_index_BAM_doublets_IDCM_20pc_6samples.txt"
+  params:
+    dataset_name = "IDCM",
+    prop_doublets = "20pc"
+  threads: 6
+  shell:
+    "bash {input.script_parse_and_index_BAM_doublets_IDCM_20pc} "
+    "{dir_runtimes} {dir_timestamps} {threads} {dir_outputs} "
+    "{dir_outputs_IDCM_6samples} {params.prop_doublets}"
+
+
+# ---------------------------------------------------
+# generate awk lookup tables for doublets simulations
+# ---------------------------------------------------
+
+# all datasets (extend inputs and outputs to add more datasets)
+rule generate_awk_lookup_tables:
+  input:
+    script_generate_awk_lookup_tables_doublets = dir_scripts + "/generate_awk_lookup_tables_doublets.sh"
+  output:
+    dir_timestamps + "/IDCM/doublets_sims/20pc/lookup_table_doublets/timestamp_lookup_table_doublets_IDCM_20pc_6samples.txt"
+  threads: 18
+  shell:
+    "bash {input.script_generate_awk_lookup_tables_doublets} "
+    "{dir_runtimes} {dir_timestamps} {dir_outputs} {dir_scripts}"
+
+
+# ----------------------------------
+# parse and merge cell barcode files
+# ----------------------------------
+
+# IDCM
+#rule parse_and_merge_barcodes_IDCM:
+#  input:
+#    dir_timestamps_IDCM + "/merge_and_index_BAM/timestamp_merge_and_index_BAM_6samples.txt",
+#    script_parse_and_merge_barcodes = dir_scripts + "/parse_and_merge_barcodes_IDCM.sh"
+#  output:
+#    dir_timestamps_IDCM + "/parse_and_merge_barcodes/timestamp_parse_and_merge_barcodes_6samples.txt"
+#  params:
+#    sample_id_1 = lambda wildcards: sample_ids_IDCM[0],
+#    sample_id_2 = lambda wildcards: sample_ids_IDCM[1],
+#    sample_id_3 = lambda wildcards: sample_ids_IDCM[2],
+#    sample_id_4 = lambda wildcards: sample_ids_IDCM[3],
+#    sample_id_5 = lambda wildcards: sample_ids_IDCM[4],
+#    sample_id_6 = lambda wildcards: sample_ids_IDCM[5],
+#    sample_id_1_short = lambda wildcards: sample_ids_IDCM_short[0],
+#    sample_id_2_short = lambda wildcards: sample_ids_IDCM_short[1],
+#    sample_id_3_short = lambda wildcards: sample_ids_IDCM_short[2],
+#    sample_id_4_short = lambda wildcards: sample_ids_IDCM_short[3],
+#    sample_id_5_short = lambda wildcards: sample_ids_IDCM_short[4],
+#    sample_id_6_short = lambda wildcards: sample_ids_IDCM_short[5]
+#  threads: 1
+#  shell:
+#    "bash {input.script_parse_and_merge_barcodes} {dir_runtimes_IDCM} {dir_timestamps_IDCM} {threads} "
+#    "{dir_outputs_IDCM} {dir_outputs_IDCM_6samples} "
+#    "{params.sample_id_1} {params.sample_id_2} {params.sample_id_3} {params.sample_id_4} {params.sample_id_5} {params.sample_id_6} "
+#    "{params.sample_id_1_short} {params.sample_id_2_short} {params.sample_id_3_short} {params.sample_id_4_short} {params.sample_id_5_short} {params.sample_id_6_short}"
+#
+#
+## -------------------------
+## merge and index BAM files
+## -------------------------
+#
+## IDCM
+#rule merge_and_index_BAM_IDCM:
+#  input:
+#    script_merge_and_index_BAM = dir_scripts + "/merge_and_index_BAM_IDCM.sh"
+#  output:
+#    dir_timestamps_IDCM + "/merge_and_index_BAM/timestamp_merge_and_index_BAM_6samples.txt"
+#  params:
+#    sample_id_1 = lambda wildcards: sample_ids_IDCM[0],
+#    sample_id_2 = lambda wildcards: sample_ids_IDCM[1],
+#    sample_id_3 = lambda wildcards: sample_ids_IDCM[2],
+#    sample_id_4 = lambda wildcards: sample_ids_IDCM[3],
+#    sample_id_5 = lambda wildcards: sample_ids_IDCM[4],
+#    sample_id_6 = lambda wildcards: sample_ids_IDCM[5]
+#  threads: 1
+#  shell:
+#    "bash {input.script_merge_and_index_BAM} {dir_runtimes_IDCM} {dir_timestamps_IDCM} {threads} "
+#    "{dir_outputs_IDCM} {dir_outputs_IDCM_6samples} {params.sample_id_1} {params.sample_id_2} "
+#    "{params.sample_id_3} {params.sample_id_4} {params.sample_id_5} {params.sample_id_6}"
+#
+##----------------------------------------------------------
+## parse BAM files to add unique sample IDs to cell barcodes
+## ---------------------------------------------------------
+## IDCM
+#rule parse_BAM_files_IDCM:
+#  input:
+#    script_parse_BAM_files = dir_scripts + "/parse_BAM_files.sh"
+#  output:
+#    dir_timestamps_IDCM + "/parse_BAM_files/timestamp_parse_BAM_files_{sample_IDCM}.txt"
+#  params:
+#    short_sample_id = lambda wildcards: sample_ids_IDCM_short_named[wildcards.sample_IDCM]
+#  threads: 1
+#  shell:
+#     "bash {input.script_parse_BAM_files} {dir_runtimes_IDCM} {dir_timestamps_IDCM} {threads} "
+#     "{wildcards.sample_IDCM} {params.short_sample_id} {dir_outputs_IDCM}"
+#
